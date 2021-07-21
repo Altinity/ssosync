@@ -27,7 +27,7 @@ import (
 type Client interface {
 	GetUsers(string) ([]*admin.User, error)
 	GetDeletedUsers() ([]*admin.User, error)
-	GetGroups(string) ([]*admin.Group, error)
+	GetGroups([]string) ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
 }
 
@@ -116,6 +116,18 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	return u, err
 }
 
+func deleteDuplicatesGroups(groups []*admin.Group)[]*admin.Group {
+	keys := make(map[*admin.Group]bool)
+	cleanedGroups := []*admin.Group{}
+	for _, entry := range groups {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			cleanedGroups = append(cleanedGroups, entry)
+		}
+	}
+	return cleanedGroups
+}
+
 // GetGroups will get the groups from Google's Admin API
 // using the Method: groups.list with parameter "query"
 // References:
@@ -129,15 +141,19 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 //  name:contact* email:contact*
 //  name:Admin* email:aws-*
 //  email:aws-*
-func (c *client) GetGroups(query string) ([]*admin.Group, error) {
+func (c *client) GetGroups(queries []string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error
 
-	if query != "" {
-		err = c.service.Groups.List().Customer("my_customer").Query(query).Pages(context.TODO(), func(groups *admin.Groups) error {
-			g = append(g, groups.Groups...)
-			return nil
-		})
+	if len(queries) > 0 {
+		for _, query:= range(queries){
+			err = c.service.Groups.List().Customer("my_customer").Query(query).Pages(context.TODO(), func(groups *admin.Groups) error {
+				g = append(g, groups.Groups...)
+				return nil
+			})
+		}
+		g = deleteDuplicatesGroups(g)
+
 	} else {
 		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
 			g = append(g, groups.Groups...)

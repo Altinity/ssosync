@@ -18,12 +18,11 @@ package internal
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
 	"github.com/awslabs/ssosync/internal/google"
 	"github.com/hashicorp/go-retryablehttp"
+	"io/ioutil"
 
 	log "github.com/sirupsen/logrus"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -32,8 +31,8 @@ import (
 // SyncGSuite is the interface for synchronizing users/groups
 type SyncGSuite interface {
 	SyncUsers(string) error
-	SyncGroups(string) error
-	SyncGroupsUsers(string) error
+	SyncGroups([]string) error
+	SyncGroupsUsers([]string) error
 }
 
 // SyncGSuite is an object type that will synchronize real users and groups
@@ -165,7 +164,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 //  name:contact* email:contact*
 //  name:Admin* email:aws-*
 //  email:aws-*
-func (s *syncGSuite) SyncGroups(query string) error {
+func (s *syncGSuite) SyncGroups(query []string) error {
 
 	log.WithField("query", query).Debug("get google groups")
 	googleGroups, err := s.google.GetGroups(query)
@@ -270,7 +269,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 //  4) add groups in aws and add its members, these were added in google
 //  5) validate equals aws an google groups members
 //  6) delete groups in aws, these were deleted in google
-func (s *syncGSuite) SyncGroupsUsers(query string) error {
+func (s *syncGSuite) SyncGroupsUsers(query []string) error {
 
 	log.WithField("query", query).Info("get google groups")
 	googleGroups, err := s.google.GetGroups(query)
@@ -377,7 +376,7 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
 
 		log.Info("creating group")
-		_, err := s.aws.CreateGroup(awsGroup)
+		awsGroupCreated, err := s.aws.CreateGroup(awsGroup)
 		if err != nil {
 			log.Error("creating group")
 			return err
@@ -394,7 +393,7 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 			}
 
 			log.WithField("user", awsUserFull.Username).Info("adding user to group")
-			err = s.aws.AddUserToGroup(awsUserFull, awsGroup)
+			err = s.aws.AddUserToGroup(awsUserFull, awsGroupCreated)
 			if err != nil {
 				return err
 			}
